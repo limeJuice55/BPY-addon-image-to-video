@@ -1,26 +1,33 @@
+#info to be displayed at addon settings
+bl_info = {
+    "name" : "Image Sequence Converter",
+    "author" : "Liam D'Arcy",
+    "version" : (1, 5),
+    "blender" : (3, 00, 1),
+    "location" : "Properties > output",
+    "category" : "Import-Export"
+}
+
 #imports main modules
 import bpy
 import os
 
 #returns the joined path the directory and the files
-def process_files(context, directory, files):
+def process_files(context, dir, fileList):
     import os
-    for file in files:
-        path = os.path.join(directory, file.name)
-        print("process %s" % path)
-        #add function here
-    return {'FINISHED'}
+#   placeholder
+    return {"FINISHED"}
 
 #imports various functions from modules
 from bpy.props import StringProperty, BoolProperty, CollectionProperty
 from bpy_extras.io_utils import ImportHelper
 from bpy.types import Operator, OperatorFileListElement
 
-#-------------------------------------------------------------------------------
+#----------------------
 # Defines the UI panel
-#-------------------------------------------------------------------------------
+#----------------------
 
-class ImageSeqConverter(bpy.types.Panel):
+class UIPanel(bpy.types.Panel):
     """Creates a Panel in the Object properties window"""
     #panel properties
     bl_label = "Output"
@@ -29,8 +36,7 @@ class ImageSeqConverter(bpy.types.Panel):
     bl_region_type = "WINDOW"
     bl_context = "output"
         
-
-    #defines UI creating
+    #defines UI creation
     def draw(self, context):
         layout = self.layout
 
@@ -38,13 +44,13 @@ class ImageSeqConverter(bpy.types.Panel):
         row = layout.row()
         row.label(text="Convert Image Sequence", icon='IMAGE_DATA')
         row = layout.row()  
-        #button (placeholder)
+        #button
         row.scale_y = 3.0
         row.operator("file.open_filebrowser", text= "Import Images")
         
-#-------------------------------------------------------------------------------
+#-----------------------------------
 # Defines The file browser operator
-#-------------------------------------------------------------------------------       
+#-----------------------------------
         
 class OpenFileBrowser(Operator, ImportHelper):
     #properties
@@ -65,45 +71,29 @@ class OpenFileBrowser(Operator, ImportHelper):
     )
     
     #creates an array of the different files
-    files = CollectionProperty(
+    fileList: CollectionProperty(
         name="BVH files",
         type=OperatorFileListElement,
         )
 
     #string of the path directory
-    directory = StringProperty(subtype='DIR_PATH')
+    dir: StringProperty(subtype='DIR_PATH')
     
     #activates function up top to return the full directory
     def execute(self, context):
-        return process_files(context, self.directory, self.files)
-    
-    
-
-"""    def execute(self, context):
-        Do something with the selected file(s)
-        filename, extension = os.path.splitext(self.filepath)
-        
-        print('Selected file:', self.filepath)
-        print('File name:', filename)
-        print('File extension:', extension)
-        print('Some Boolean:', self.some_boolean)
-        
-        return {'FINISHED'}"""
-        
-
+        return process_files(context, self.dir, self.fileList)
 
 #Register and unregister class to allow for module to be imported
 def register():
-    bpy.utils.register_class(ImageSeqConverter)
+    bpy.utils.register_class(UIPanel)
     bpy.utils.register_class(OpenFileBrowser)
-    #bpy.types.INFO_MT_file_import.append(menu_func_import)
 
 
 def unregister():
-    bpy.utils.unregister_class(ImageSeqConverter)
+    bpy.utils.unregister_class(UIPanel)
     bpy.utils.unregister_class(OpenFileBrowser)
-    #bpy.types.INFO_MT_file_import.remove(menu_func_import)
 
 
+#Checks if the addon is enabled in the user preferences
 if __name__ == "__main__":
     register()
