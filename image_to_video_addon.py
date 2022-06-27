@@ -1,97 +1,120 @@
-#info to be displayed at addon settings
-bl_info = {
-    "name" : "Image Sequence Converter",
-    "author" : "Liam D'Arcy",
-    "version" : (1, 5),
-    "blender" : (3, 00, 1),
-    "location" : "Properties > output",
-    "category" : "Import-Export"
-}
-
 #imports main modules
 import bpy
 import os
 
 #returns the joined path the directory and the files
-def process_files(context, dir, fileList):
-    import os
-#   placeholder
-    return {"FINISHED"}
 
 #imports various functions from modules
 from bpy.props import StringProperty, BoolProperty, CollectionProperty
-from bpy_extras.io_utils import ImportHelper
-from bpy.types import Operator, OperatorFileListElement
 
+# This class contains the two directories to be used:
+# the input directory with the individual images,
+# and the output directory for the final product.
+
+class myProperties(bpy.types.PropertyGroup):
+    
+    input_directory : StringProperty(name="", subtype="DIR_PATH")
+    output_directory : StringProperty(name="", subtype="FILE_PATH")
+    
 #----------------------
-# Defines the UI panel
+# This is the class for the UI.
 #----------------------
 
 class UIPanel(bpy.types.Panel):
     """Creates a Panel in the Object properties window"""
-    #panel properties
+    #panel name, ID's and location
     bl_label = "Output"
     bl_idname = "IMG_PT_CONVERT"
     bl_space_type = 'PROPERTIES'
     bl_region_type = "WINDOW"
     bl_context = "output"
+    
         
-    #defines UI creation
+    #Creates the UI
     def draw(self, context):
         layout = self.layout
-
+        mydirectories = context.scene.my_directories
+        
+        #input and output directory
+        layout.prop(mydirectories, "input_directory")
+        row = layout.row
+        layout.prop(mydirectories, "output_directory")
         #text and icon
         row = layout.row()
         row.label(text="Convert Image Sequence", icon='IMAGE_DATA')
-        row = layout.row()  
-        #button
-        row.scale_y = 3.0
-        row.operator("file.open_filebrowser", text= "Import Images")
+        row = layout.row()
+        #button that calls the file browser
+        row.scale_y = 2.0
+        row.operator("file.open_filebrowser", text= "Begin Conversion")
         
-#-----------------------------------
-# Defines The file browser operator
-#-----------------------------------
-        
-class OpenFileBrowser(Operator, ImportHelper):
+#------------------------------------------------------------
+# This is the command called upon pressing "BEGIN CONVERSION"
+#------------------------------------------------------------
+class OpenFileBrowser(bpy.types.Operator):
     #properties
     bl_idname = "file.open_filebrowser"
     bl_label = "Open the file browser"
     
-    #filters file types
-    filter_glob: StringProperty(
-        default='*.jpg;*.jpeg;*.png;*.tif;*.tiff;*.bmp',
-        options={'HIDDEN'}
-    )
-    
-    #test boolean property
-    some_boolean: BoolProperty(
-        name='Some Boolean',
-        description='Testing',
-        default=True,
-    )
-    
-    #creates an array of the different files
-    fileList: CollectionProperty(
-        name="BVH files",
-        type=OperatorFileListElement,
-        )
-
-    #string of the path directory
-    dir: StringProperty(subtype='DIR_PATH')
-    
-    #activates function up top to return the full directory
+    #executes the conversion
     def execute(self, context):
-        return process_files(context, self.dir, self.fileList)
+        #begins by pulling the files from the input directory
+        mydirectories = context.scene.my_directories
+        directory = bpy.path.abspath(mydirectories.input_directory)
+        files = os.listdir(directory)
+        
+        #print debugs
+        print(directory)        
+        print(files)
+        
+        #this creates the shorthands that are used later in the code
+        scenes = bpy.context.scene
+        seqs = scenes.sequence_editor.sequences
+        
+        j = 0
+        
+        #this loop adds one new image one frame after another
+        for i in files:
+            j += 1
+            seqs.new_image("image" + str(j), directory + i, 1, j)
+            #debug
+            print(i)
+        
+        #groups the images together
+        bpy.ops.sequencer.meta_make()
+        
+        #resets the frames    
+        scenes.frame_start = 0
+        scenes.frame_end = j
+        
+        scenes.render.filepath = bpy.path.abspath(mydirectories.output_directory)
+       
+        #activates the render sequence
+        bpy.ops.render.render(
+            animation=True, 
+            write_still=False, 
+            use_viewport=False, 
+        )
+        
+        return {'FINISHED'}
+
+        
+
+classes = [myProperties, UIPanel, OpenFileBrowser]
+
 
 #Register and unregister class to allow for module to be imported
 def register():
-    bpy.utils.register_class(UIPanel)
-    bpy.utils.register_class(OpenFileBrowser)
+    for cls in classes:
+        bpy.utils.register_class(cls)
+        
+        bpy.types.Scene.my_directories = bpy.props.PointerProperty(type=myProperties)
 
 
 def unregister():
-    bpy.utils.unregister_class(UIPanel)
-    bpy.utils.unregister_class(OpenFileBrowser)
+    for cls in classes:
+        bpy.utils.unregister_class(cls)
+        
+        del bpy.types.Scene.my_directories
 
 
 #Checks if the addon is enabled in the user preferences
