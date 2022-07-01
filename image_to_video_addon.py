@@ -1,106 +1,183 @@
+bl_info = {
+    "name": "Image to Video Converter",
+    "author": "Liam D'Arcy",
+    "version": (1, 0),
+    "blender": (3, 2, 0),
+    "location": "Properties > Output Properties > Image to Video Converter",
+    "description": "Converts a list of images to video",
+    "warning": "",
+    "doc_url": "",
+    "category": "Render",
+}
+
 #imports main modules
 import bpy
 import os
 
-#returns the joined path the directory and the files
+#imports extra modules
+from bpy.props import StringProperty, BoolProperty, IntProperty, CollectionProperty
+from bpy_extras.io_utils import ImportHelper
+from bpy.types import Operator, OperatorFileListElement
 
-#imports various functions from modules
-from bpy.props import StringProperty, BoolProperty, CollectionProperty
+#shorthands for commonly used code
+scene = bpy.context.scene
+editor = scene.sequence_editor
+seq = editor.sequences
+win = bpy.context.window_manager
 
-# This class contains the two directories to be used:
-# the input directory with the individual images,
-# and the output directory for the final product.
+#clears the sequence editor
+def clear_sequence():
+    for strip in seq:
+        seq.remove(strip)
+        
+    return {'FINISHED'}
+
+#resets the frames & adjusts video length 
+def adjust_video_length(length):
+    scene.frame_start = 0
+    scene.frame_end = length
+    
+    return {'FINISHED'}
+
+#adds the image strip and determines its length
+def add_image_strip(directory, files):
+    j = 0
+    for i in files:
+        j += 1
+        seq.new_image("image" + str(j), directory + i, 1, j)
+        #debug
+        print("imported image: " + str(i))
+    bpy.ops.sequencer.meta_make()
+    
+    return j
+
+def adjust_resolution(x, y):
+    scene.render.resolution_x = x
+    scene.render.resolution_y = y
+    
+    return {"FINISHED"}
+
+
+
+
+#-----------------------------------------------
+# Class of properties to be referenced elsewhere
+#-----------------------------------------------
 
 class myProperties(bpy.types.PropertyGroup):
     
-    input_directory : StringProperty(name="", subtype="DIR_PATH")
-    output_directory : StringProperty(name="", subtype="FILE_PATH")
+    output_directory : StringProperty(name="Output", subtype="FILE_PATH", description="Destination for your Video")
     
-#----------------------
-# This is the class for the UI.
-#----------------------
+    manual_res : BoolProperty(name="Manually Adjust Resolution")
+    res_x : IntProperty(name="X Resolution", default=scene.render.resolution_x)
+    res_y : IntProperty(name="Y Resolution", default=scene.render.resolution_y)
+    
+#---------------------------------------
+# Class which defines the User Interface
+#---------------------------------------
 
 class UIPanel(bpy.types.Panel):
     """Creates a Panel in the Object properties window"""
     #panel name, ID's and location
-    bl_label = "Output"
+    bl_label = "Image to Video Converter"
     bl_idname = "IMG_PT_CONVERT"
     bl_space_type = 'PROPERTIES'
     bl_region_type = "WINDOW"
     bl_context = "output"
     
         
-    #Creates the UI
+    #Function which defines the UI
     def draw(self, context):
         layout = self.layout
         mydirectories = context.scene.my_directories
         
-        #input and output directory
-        layout.prop(mydirectories, "input_directory")
-        row = layout.row
+        #input and output directories
         layout.prop(mydirectories, "output_directory")
+        row = layout.row()
+        layout.prop(mydirectories, "manual_res")
+        
+        if mydirectories.manual_res == True:
+            layout.prop(mydirectories, "res_x")
+            layout.prop(mydirectories, "res_y")
+        
         #text and icon
         row = layout.row()
-        row.label(text="Convert Image Sequence", icon='IMAGE_DATA')
+        row.label(text="Convert Image Sequence to Video", icon='IMAGE_DATA')
         row = layout.row()
         #button that calls the file browser
         row.scale_y = 2.0
-        row.operator("file.open_filebrowser", text= "Begin Conversion")
+        row.operator("import_test.some_data", text= "Convert Image to Video")
         
 #------------------------------------------------------------
-# This is the command called upon pressing "BEGIN CONVERSION"
+# Class which converts the image sequence to video
 #------------------------------------------------------------
-class OpenFileBrowser(bpy.types.Operator):
-    #properties
-    bl_idname = "file.open_filebrowser"
-    bl_label = "Open the file browser"
     
-    #executes the conversion
-    def execute(self, context):
-        #begins by pulling the files from the input directory
-        mydirectories = context.scene.my_directories
-        directory = bpy.path.abspath(mydirectories.input_directory)
-        files = os.listdir(directory)
-        
-        #print debugs
-        print(directory)        
-        print(files)
-        
-        #this creates the shorthands that are used later in the code
-        scenes = bpy.context.scene
-        seqs = scenes.sequence_editor.sequences
-        
-        j = 0
-        
-        #this loop adds one new image one frame after another
-        for i in files:
-            j += 1
-            seqs.new_image("image" + str(j), directory + i, 1, j)
-            #debug
-            print(i)
-        
-        #groups the images together
-        bpy.ops.sequencer.meta_make()
-        
-        #resets the frames    
-        scenes.frame_start = 0
-        scenes.frame_end = j
-        
-        scenes.render.filepath = bpy.path.abspath(mydirectories.output_directory)
-       
-        #activates the render sequence
-        bpy.ops.render.render(
-            animation=True, 
-            write_still=False, 
-            use_viewport=False, 
+class ImportSomeData(Operator, ImportHelper):
+    """This appears in the tooltip of the operator and in the generated docs"""
+    bl_idname = "import_test.some_data"  # important since its how bpy.ops.import_test.some_data is constructed
+    bl_label = "Import Some Data"
+
+    # ImportHelper mixin class uses this
+    filename_ext = ".png"
+
+    filter_glob: StringProperty(
+            default="*.png",
+            options={'HIDDEN'},
+            maxlen=255,  # Max internal buffer length, longer would be clamped.
+            )
+
+    files: CollectionProperty(
+        name="BVH files",
+        type=OperatorFileListElement,
         )
+
+    directory: StringProperty(subtype='DIR_PATH', options={'HIDDEN'})
+
+    def execute(self, context):
+        
+        fileList = []
+        
+        for file in self.files:
+            filepath = file.name
+            print(filepath)
+            fileList.append(file.name)
+            
+        print(fileList)
+        print(self.directory)
+        
+        mydirectories = scene.my_directories
+        
+        clear_sequence()
+        
+        video_length = add_image_strip(self.directory, fileList)
+
+        adjust_video_length(video_length)
+        
+        scene.render.filepath = bpy.path.abspath(mydirectories.output_directory)
+        
+        old_x = scene.render.resolution_x
+        old_y = scene.render.resolution_y
+        
+        if mydirectories.manual_res == True:
+            adjust_resolution(mydirectories.res_x, mydirectories.res_y)
+        
+        #initiates export
+        
+#        win.progress_update(50)
+        
+        
+        bpy.ops.render.render(animation=True, write_still=False, use_viewport=False)
+        
+#        win.progress_update(99)
+        
+        clear_sequence()
+        
+        adjust_resolution(old_x, old_y)
         
         return {'FINISHED'}
 
-        
-
-classes = [myProperties, UIPanel, OpenFileBrowser]
-
+ 
+classes = [myProperties, UIPanel, ImportSomeData]
 
 #Register and unregister class to allow for module to be imported
 def register():
