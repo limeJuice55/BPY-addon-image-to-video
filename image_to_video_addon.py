@@ -130,7 +130,7 @@ class ImportSomeData(Operator, ImportHelper):
     filename_ext = ".png"
 
     filter_glob: StringProperty(
-            default='*.jpg;*.jpeg;*.png;*.tif;*.tiff;*.bmp',
+            default='*.jpg;*.jpeg;*.png;*.tif;*.tiff;*.bmp;*.exr',
             options={'HIDDEN'},
             maxlen=255,  # Max internal buffer length, longer would be clamped.
             )
