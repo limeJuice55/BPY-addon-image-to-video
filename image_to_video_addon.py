@@ -15,7 +15,7 @@ import bpy
 import os
 
 #imports extra modules
-from bpy.props import StringProperty, BoolProperty, IntProperty, CollectionProperty
+from bpy.props import StringProperty, BoolProperty, IntProperty, CollectionProperty, EnumProperty
 from bpy_extras.io_utils import ImportHelper
 from bpy.types import Operator, OperatorFileListElement
 
@@ -24,44 +24,81 @@ def clear_sequence(seq):
     for strip in seq:
         seq.remove(strip)
         
-    return {'FINISHED'}
 
 #used to manually adjust resolution. Only used if manual_res == True
 def adjust_resolution(scene, x, y):
     scene.render.resolution_x = x
     scene.render.resolution_y = y
     
-    return {"FINISHED"}
 
 #sets the video length
 def adjust_frames(scene, start, end):
     scene.frame_start = start
     scene.frame_end = end
     
-    return {'FINISHED'}
+    
+#converts the imported files to a standard array
+def create_file_list(files):
+    fileList = []
+    for file in files:
+        fileList.append(file.name)
+
+    return fileList
+
+
+#creates each frame in the sequencer and returns the length of the video
+def create_frames(seq, fileList, directory):
+    j = 0
+    for i in fileList:
+        j += 1
+        seq.new_image("image" + str(j), directory + i, 1, j)
+        #debug
+        print("imported image: " + str(i))
+        
+    return j
+
+def set_file_format(scene, formatID):
+    if formatID == "MP4":
+        scene.render.ffmpeg.format = 'MPEG4'
+    elif formatID == "AVI":
+        scene.render.ffmpeg.format = 'AVI'
+    elif formatID == "QUICK":
+        scene.render.ffmpeg.format = "QUICKTIME"
+    else:
+        scene.render.ffmpeg.format = "MKV"
 
 #-----------------------------------------------
 # Class of properties to be referenced elsewhere
 #-----------------------------------------------
 
-class myProperties(bpy.types.PropertyGroup):
+class MyProperties(bpy.types.PropertyGroup):
     
-    output_directory : StringProperty(name="Output", subtype="FILE_PATH", description="Destination for your Video")
+    outputDirectory : StringProperty(name="Output", subtype="FILE_PATH", description="The location of your final video within your computer's files")
     
-    manual_res : BoolProperty(name="Manually Adjust Resolution")
-    res_x : IntProperty(name="X Res", default=1920)
-    res_y : IntProperty(name="Y Res", default=1080)
+    #resolution settings
+    manualRes : BoolProperty(name="Manually Adjust Resolution", description="Allows you to change the resolution of your video. Default is 1920 x 1080")
+    resX : IntProperty(name="X Res", default=1920, description="x-value for your adjusted resolution. Does not apply if Manually Adjust Input is not checked")
+    resY : IntProperty(name="Y Res", default=1080, description="y-value for your adjusted resolution. Does not apply if Manually Adjust Input is not checked")
     
-    manual_frames : BoolProperty(name="Manually Adjust Frames")
-    frame_start : IntProperty(name="Frame Start", default=0)
-    frame_end : IntProperty(name="Frame End", default=250)
+    #frame settings
+    manualFrames : BoolProperty(name="Manually Adjust Frames", description="Allows you to change the resolution of your video. Default is the number of files imported")
+    frameStart : IntProperty(name="Frame Start", default=0, description="The first frame of your video")
+    frameEnd : IntProperty(name="Frame End", default=250, description="The last frame of your video")
+    
+    #determines the output file type
+    fileType : EnumProperty(
+        name="File Type", 
+        description="The file format to be produced",
+        items=[("MP4", "mp4", ""),("AVI", "AVI", ""),("QUICK", "Quicktime", ""), ("MKV", "MKV", "")],
+        default="MKV"
+        )
+    
     
 #---------------------------------------
 # Creates the UI panel
 #---------------------------------------
 
 class UIPanel(bpy.types.Panel):
-    #panel name, ID's and location
     bl_label = "Image to Video Converter"
     bl_idname = "IMG_PT_CONVERT"
     bl_space_type = 'PROPERTIES'
@@ -69,72 +106,69 @@ class UIPanel(bpy.types.Panel):
     bl_context = "output"
     
         
-    #Function which defines the UI
+    #Creates the UI
     def draw(self, context):
         layout = self.layout
-        mydirectories = context.scene.my_directories
+        my_properties = context.scene.my_properties
         
-        #input and output directories
-        layout.prop(mydirectories, "output_directory")
+        #Output directory
+        layout.prop(my_properties, "outputDirectory")
         row = layout.row()
-        layout.prop(mydirectories, "manual_res")
-        
-        row = layout.row()
-        sub = row.row()
-        sub.enabled = mydirectories.manual_res
-        sub.prop(mydirectories, "res_x")
+        #checkbox and values for manual resolution cropping
+        layout.prop(my_properties, "manualRes")
         
         row = layout.row()
         sub = row.row()
-        sub.enabled = mydirectories.manual_res
-        sub.prop(mydirectories, "res_y")
-        
-        row = layout.row()
-        layout.prop(mydirectories, "manual_frames")
+        sub.enabled = my_properties.manualRes
+        sub.prop(my_properties, "resX")
         
         row = layout.row()
         sub = row.row()
-        sub.enabled = mydirectories.manual_frames
-        sub.prop(mydirectories, "frame_start")
+        sub.enabled = my_properties.manualRes
+        sub.prop(my_properties, "resY")
+        
+        row = layout.row()
+        #checkbox and values for manual frame clipping
+        layout.prop(my_properties, "manualFrames")
         
         row = layout.row()
         sub = row.row()
-        sub.enabled = mydirectories.manual_frames
-        sub.prop(mydirectories, "frame_end")
-
-
-        #text and icon
+        sub.enabled = my_properties.manualFrames
+        sub.prop(my_properties, "frameStart")
+        
+        row = layout.row()
+        sub = row.row()
+        sub.enabled = my_properties.manualFrames
+        sub.prop(my_properties, "frameEnd")
+        
+        row = layout.row()
+        layout.prop(my_properties, "fileType")
+        
+        #text description
         row = layout.row()
         row.label(text="Convert Image Sequence to Video", icon='IMAGE_DATA')
         row = layout.row()
-        #button that calls the file browser
+        #button to initiate conversion
         row.scale_y = 2.0
-        row.operator("import_test.some_data", text= "Import Images and Convert")
+        row.operator("convert.image_to_video", text= "Import Images and Convert")
         
 #------------------------------------------------------------
-# Operator Class
-# Opens a file browser
-# imports the images
-# converts to video
-# Stores video in designated "Output" directory
+# Operator class - Collects, organises and converts the image files into video
 #------------------------------------------------------------
     
-class ImportSomeData(Operator, ImportHelper):
-    """This appears in the tooltip of the operator and in the generated docs"""
-    bl_idname = "import_test.some_data"  # important since its how bpy.ops.import_test.some_data is constructed
-    bl_label = "Import Some Data"
+class BeginConversion(Operator, ImportHelper):
+    bl_idname = "convert.image_to_video"  # important since its how bpy.ops.import_test.some_data is constructed
+    bl_label = "Import Files and Convert"
     bl_options = {'REGISTER', 'INTERNAL'}
     bl_description = "Import Images and Convert them to Video."
-
-    # ImportHelper mixin class uses this
-    filename_ext = ".png"
-
-    filter_glob: StringProperty(
+    
+    #filters out unneeded file types
+    filterGlob: StringProperty(
             default='*.jpg;*.jpeg;*.png;*.tif;*.tiff;*.bmp;*.exr',
             options={'HIDDEN'},
             maxlen=255,  # Max internal buffer length, longer would be clamped.
             )
-
+    
     files: CollectionProperty(
         name="BVH files",
         type=OperatorFileListElement,
@@ -148,94 +182,80 @@ class ImportSomeData(Operator, ImportHelper):
         scene = bpy.context.scene
         seq = scene.sequence_editor.sequences
         
-        #formats the file list as taken from the image 
-        filesFormatted = self.files
-        fileList = []
-        
-        #adds each file in the file list to a new file with basic array formatting - think of it as dictionary to array code
-        for file in filesFormatted:
-            filepath = file.name
-            print(filepath) #debug
-            fileList.append(filepath)
-            
-        print(fileList) #debug
-        
-        
         #shorthand for the properties from myProperties
-        mydirectories = scene.my_directories
+        my_properties = scene.my_properties
         
+        directory = self.directory
+        
+        fileList = create_file_list(self.files)
         
         clear_sequence(seq)
-        
-        j = 0
-        
-        directoryString = self.directory
-        
-        print(directoryString)
-        
-        
-        #creates each frame in the sequencer and produces the length of the video
-        for i in fileList:
-            j += 1
-            seq.new_image("image" + str(j), directoryString + i, 1, j)
-            #debug
-            print("imported image: " + str(i))
+            
+        videoLength = create_frames(seq, fileList, directory)
             
         #merges the frames into a video
         bpy.ops.sequencer.meta_make()
         
-        old_start = scene.frame_start
-        old_end = scene.frame_end
+        #caching blender's default render settings
+        oldStart = scene.frame_start
+        oldEnd = scene.frame_end
         
-        if mydirectories.manual_frames == True:
-            adjust_frames(scene, mydirectories.frame_start, mydirectories.frame_end)
+        oldX = scene.render.resolution_x
+        oldY = scene.render.resolution_y
+        
+        oldType = scene.render.image_settings.file_format
+        
+        #changes the frame clipping to user-defined values if allowed
+        if my_properties.manualFrames == True:
+            adjust_frames(scene, my_properties.frameStart, my_properties.frameEnd)
         else:
-            adjust_frames(scene, 0, j)
+            adjust_frames(scene, 0, videoLength)
         
+        oldPath = scene.render.filepath
         
-        old_path = scene.render.filepath
+        #sets blender's output path to the user-defined value
+        scene.render.filepath = bpy.path.abspath(my_properties.outputDirectory)
         
-        #sets the file output path to be the folder the images came from
-        scene.render.filepath = bpy.path.abspath(mydirectories.output_directory)
+        #changes the resolution to user-defined values if allowed
+        if my_properties.manualRes == True:
+            adjust_resolution(scene, my_properties.resX, my_properties.resY)
+            
+        scene.render.image_settings.file_format = 'FFMPEG'
         
-        #caches the old resolution settings
-        old_x = scene.render.resolution_x
-        old_y = scene.render.resolution_y
-        
-        #checks whether to use manual resolutions
-        if mydirectories.manual_res == True:
-            adjust_resolution(scene, mydirectories.res_x, mydirectories.res_y)
+        set_file_format(scene, my_properties.fileType)
         
         #activates render
         bpy.ops.render.render(animation=True, write_still=False, use_viewport=False)
         
         clear_sequence(seq)
         
-        #resets resolution
-        adjust_resolution(scene, old_x, old_y)
+        #resets values to before conversion
+        adjust_resolution(scene, oldX, oldY)
         
-        adjust_frames(scene, old_start, old_end)
+        adjust_frames(scene, oldStart, oldEnd)
         
-        scene.render.filepath = old_path
+        scene.render.filepath = oldPath
+        
+        scene.render.image_settings.file_format = oldType
         
         return {'FINISHED'}
 
  
-classes = [myProperties, UIPanel, ImportSomeData]
+classes = [MyProperties, UIPanel, BeginConversion]
 
 #activates the addon when enabled in preferences
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
         
-        bpy.types.Scene.my_directories = bpy.props.PointerProperty(type=myProperties)
+    bpy.types.Scene.my_properties = bpy.props.PointerProperty(type=MyProperties)
 
 #deactivates the addon when disabled in prefernces
 def unregister():
     for cls in classes:
         bpy.utils.unregister_class(cls)
         
-        del bpy.types.Scene.my_directories
+    del bpy.types.Scene.my_properties
 
 
 #Checks if the addon is enabled in the user preferences
