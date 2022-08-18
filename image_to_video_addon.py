@@ -162,7 +162,7 @@ class UIPanel(bpy.types.Panel):
 #------------------------------------------------------------
     
 class BeginConversion(Operator, ImportHelper):
-    bl_idname = "convert.image_to_video"  # important since its how bpy.ops.import_test.some_data is constructed
+    bl_idname = "convert.image_to_video" 
     bl_label = "Import Files and Convert"
     bl_options = {'REGISTER', 'INTERNAL'}
     bl_description = "Import Images and Convert them to Video."
@@ -308,7 +308,7 @@ def register():
         
     bpy.types.Scene.my_properties = bpy.props.PointerProperty(type=MyProperties)
 
-#deactivates the addon when disabled in prefernces
+#deactivates the addon when disabled in preferences
 def unregister():
     for cls in classes:
         bpy.utils.unregister_class(cls)
