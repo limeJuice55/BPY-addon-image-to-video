@@ -66,6 +66,7 @@ def set_file_format(scene, formatID):
         scene.render.ffmpeg.format = "QUICKTIME"
     else:
         scene.render.ffmpeg.format = "MKV"
+    print("Set Format Container to: " + formatID)
 
 #-----------------------------------------------
 # Class of properties to be referenced elsewhere
@@ -152,6 +153,9 @@ class UIPanel(bpy.types.Panel):
         row.scale_y = 2.0
         row.operator("convert.image_to_video", text= "Import Images and Convert")
         
+        row = layout.row()
+        row.operator("test.driver", text="Driver test. Check SysConsole")
+        
 #------------------------------------------------------------
 # Operator class - Collects, organises and converts the image files into video
 #------------------------------------------------------------
@@ -186,6 +190,7 @@ class BeginConversion(Operator, ImportHelper):
         my_properties = scene.my_properties
         
         directory = self.directory
+        print(directory)
         
         fileList = create_file_list(self.files)
         
@@ -208,8 +213,11 @@ class BeginConversion(Operator, ImportHelper):
         #changes the frame clipping to user-defined values if allowed
         if my_properties.manualFrames == True:
             adjust_frames(scene, my_properties.frameStart, my_properties.frameEnd)
+            
         else:
             adjust_frames(scene, 0, videoLength)
+            
+        print("Frames set to: " + str(scene.frame_start) + ", " + str(scene.frame_end))
         
         oldPath = scene.render.filepath
         
@@ -219,12 +227,18 @@ class BeginConversion(Operator, ImportHelper):
         #changes the resolution to user-defined values if allowed
         if my_properties.manualRes == True:
             adjust_resolution(scene, my_properties.resX, my_properties.resY)
-            
+        
+        
+        print("Resolution set to: " + str(scene.render.resolution_x) + ", " + str(scene.render.resolution_y))
+        
+        
+        print("Set File Format to: FFMPEG")
         scene.render.image_settings.file_format = 'FFMPEG'
         
         set_file_format(scene, my_properties.fileType)
         
         #activates render
+        print("Rendering...") 
         bpy.ops.render.render(animation=True, write_still=False, use_viewport=False)
         
         clear_sequence(seq)
@@ -240,8 +254,51 @@ class BeginConversion(Operator, ImportHelper):
         
         return {'FINISHED'}
 
+
+#------------------------------------------------------------------
+# Driver class. Sets up alternate context to test functions
+#------------------------------------------------------------------
+   
+class Driver(Operator):
+    bl_idname = "test.driver"  # important since its how bpy.ops.import_test.some_data is constructed
+    bl_label = "Test functions with test data"
+    bl_options = {'REGISTER', 'INTERNAL'}
+    bl_description = "Tests functions with predetermined data and produces output"
+    
+    def execute(self, context):
+        scene = bpy.context.scene
+        seq = scene.sequence_editor.sequences
+        
+        #stores default scene values
+        oldStart = scene.frame_start
+        oldEnd = scene.frame_end
+        
+        #tests the values for adjust_frames
+        def driver(start, end):
+            try:
+                print("Frame values: " + str(start), str(end))
+                adjust_frames(scene, start, end)
+            except Exception as e:
+                print("error has been detected:")
+                print(e)
+            else:
+                print("No errors detected.")
+            finally:
+                print("resulting frame clips: " + str(scene.frame_start), str(scene.frame_end))
+    
+        driver(0, 250) # standard frame clips
+        driver(1, 1) # same start and end values
+        driver(0, 200000000000000000000) # above 64-bit integer
+        driver(-50, 250) # negative start
+        driver(50, 25) # smaller end clip than start
+        driver("0", "250") # incorrect data type
+        
+        adjust_frames(scene, oldStart, oldEnd) #resets frames
+        
+        return {'FINISHED'}
+            
  
-classes = [MyProperties, UIPanel, BeginConversion]
+classes = [MyProperties, UIPanel, BeginConversion, Driver]
 
 #activates the addon when enabled in preferences
 def register():
