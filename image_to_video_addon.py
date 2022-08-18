@@ -57,6 +57,7 @@ def create_frames(seq, fileList, directory):
         
     return j
 
+#sets the file format based on the dropdown menu for files
 def set_file_format(scene, formatID):
     if formatID == "MP4":
         scene.render.ffmpeg.format = 'MPEG4'
