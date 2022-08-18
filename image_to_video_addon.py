@@ -261,7 +261,7 @@ class BeginConversion(Operator, ImportHelper):
 #------------------------------------------------------------------
    
 class Driver(Operator):
-    bl_idname = "test.driver"  # important since its how bpy.ops.import_test.some_data is constructed
+    bl_idname = "test.driver"
     bl_label = "Test functions with test data"
     bl_options = {'REGISTER', 'INTERNAL'}
     bl_description = "Tests functions with predetermined data and produces output"
